@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Automatic Drum Tuner</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin-top: 30px;
+    }
+    .note {
+      display: inline-block;
+      margin: 5px;
+      padding: 15px 20px;
+      border: 2px solid #333;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    .note.active {
+      background-color: #4CAF50;
+      color: blue;
+    }
+    #connectButton, #tuningButton {
+      margin: 10px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Automatic Drum Tuner Controller</h1>
+
+  <button id="connectButton" onclick="connectBLE()">Pair Drum Tuner</button>
+  <button id="tuningButton" onclick="startTuning()" disabled>Tune</button>
+  <button id="detectButton" onclick="startDetect()" disabled>Detect</button>
+  <div id="notesArea"></div>
+
+  <div id="status">Status: Not Connected</div>
+  <div id="freqInfo">Target: -- Hz | Actual: -- Hz</div>
+
+  <script>
+    const notes = [
+  { name: "D3", freq: 146.83 },
+  { name: "E3", freq: 164.81 },
+  { name: "F3", freq: 174.61 },
+  { name: "G3", freq: 196.00 },
+  { name: "A3", freq: 220.00 },
+  { name: "B3", freq: 246.94 },
+  { name: "C4", freq: 261.63 },
+  { name: "D4", freq: 293.66 },
+  { name: "E4", freq: 329.63 },
+  { name: "F4", freq: 349.23 },
+  { name: "G4", freq: 392.00 },
+  { name: "A4", freq: 440.00 },
+  { name: "B4", freq: 493.88 },
+  { name: "C5", freq: 523.25 },
+  { name: "D5", freq: 587.33 },
+  { name: "E5", freq: 659.25 },
+  { name: "F5", freq: 698.46 },
+  { name: "G5", freq: 783.99 }
+];
+
+    let bleDevice;
+    let bleServer;
+    let bleService;
+    let bleCharacteristic;
+    let selectedNote = null;
+
+    const SERVICE_UUID = "0000ffe0-0000-1000-8000-00805f9b34fb";
+    const CHARACTERISTIC_UUID = "0000ffe1-0000-1000-8000-00805f9b34fb";
+
+    const notesArea = document.getElementById("notesArea");
+
+    notes.forEach(noteObj => {
+  const btn = document.createElement("div");
+  btn.className = "note";
+  btn.innerHTML = `
+    <div>${noteObj.name}</div>
+    <small>${noteObj.freq} Hz</small>
+  `;
+  btn.onclick = () => selectNote(noteObj.name, btn);
+  notesArea.appendChild(btn);
+});
+
+
+
+    async function connectBLE() {
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'Joey' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        bleServer = await bleDevice.gatt.connect();
+        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+	bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+	await bleCharacteristic.startNotifications();
+
+
+        document.getElementById("status").innerText = "Status: Connected! Select a Note";
+        document.querySelectorAll('.note').forEach(el => {
+          el.style.opacity = "1";
+          el.style.pointerEvents = "auto";
+        });
+        document.getElementById("tuningButton").disabled = false;
+        document.getElementById("detectButton").disabled = false;
+
+
+      } catch (error) {
+        console.error(error);
+        alert('Bluetooth connection failed: ' + error);
+      }
+    }
+
+    function selectNote(note, button) {
+  selectedNote = note;
+
+  document.querySelectorAll('.note').forEach(el => el.classList.remove('active'));
+  button.classList.add('active');
+
+  document.getElementById("status").innerText = `Selected Note: ${note}`; // ✅ fixed
+}
+
+    async function startTuning() {
+      if (!bleCharacteristic) {
+        alert("Connect Bluetooth first!");
+        return;
+      }
+      if (!selectedNote) {
+        alert("Select a Note first!");
+        return;
+      }
+
+      const encoder = new TextEncoder();
+      await bleCharacteristic.writeValue(encoder.encode(selectedNote));
+
+      document.getElementById("status").innerText = `Sent Note: ${selectedNote}`;
+    }
+    async function startDetect() {
+    if (!bleCharacteristic) {
+    alert("Connect Bluetooth first!");
+    return;
+     }
+
+     const encoder = new TextEncoder();
+    await bleCharacteristic.writeValue(encoder.encode("DETECT"));
+
+  document.getElementById("status").innerText = `Sent Detect Command`;
+}
+
+
+    function handleNotifications(event) {
+        const value = new TextDecoder().decode(event.target.value);
+       document.getElementById("freqInfo").innerText = value;
+    }
+
+  </script>
+
+</body>
+</html>
