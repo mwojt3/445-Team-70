@@ -97,7 +97,7 @@
     async function connectBLE() {
       try {
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'Joey' }],
+          filters: [{ name: 'Drum Tuner' }],
           optionalServices: [SERVICE_UUID]
         });
 
@@ -129,7 +129,7 @@
   document.querySelectorAll('.note').forEach(el => el.classList.remove('active'));
   button.classList.add('active');
 
-  document.getElementById("status").innerText = `Selected Note: ${note}`; // ✅ fixed
+  document.getElementById("status").innerText = `Selected Note: ${note}`; 
 }
 
     async function startTuning() {

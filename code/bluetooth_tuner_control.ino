@@ -23,7 +23,7 @@ constexpr int redLED = 14;
 Servo myServo;
 bool tuned = false;
 int turnTime = 3000;
-String prevDirection = "";
+int frequencyDiff = 0;
 
 float vReal[SAMPLES];
 float vImag[SAMPLES];
@@ -113,9 +113,8 @@ void setup() {
   //led setup
   pinMode(greenLED, OUTPUT);
   pinMode(redLED, OUTPUT);
-  digitalWrite(greenLED, HIGH);
-  digitalWrite(redLED, HIGH);
 
+  //servo setup
   myServo.setPeriodHertz(50);
   myServo.attach(servoPin, 1000, 2000);
 
@@ -139,28 +138,32 @@ void setup() {
   BLEAdvertising *pAdvertising = pServer->getAdvertising();
   pAdvertising->start();
   Serial.println("Drum Tuner Bluetooth Activated...");
+
+  digitalWrite(greenLED, HIGH);
+  digitalWrite(redLED, HIGH);
 }
 
 void loop() {
+
   if (newNoteReceived) {
+    frequencyDiff = 0;
     digitalWrite(redLED,HIGH);
     digitalWrite(greenLED,LOW);
     turnTime = 4000;
     tuned = false;
-    prevDirection = "";
 
     Serial.println("Bluetooth Message Received...");
     Serial.print("Selected Note To Tune To: ");
     Serial.println(selectedNote);
 
   while(tuned == false){
-    //Strike 
+    //strike 
     Serial.println("Striking Drum...");
     digitalWrite(actuatorPin, HIGH);
     delay(250);
     digitalWrite(actuatorPin, LOW);
 
-    //Mic
+    //mic
     Serial.println("Reading Microphone...");
     float actualFrequency = readMicrophoneFrequency();
 
@@ -174,31 +177,38 @@ void loop() {
     pCharacteristic->setValue(message.c_str());
     pCharacteristic->notify();
 
-    if (abs(targetFrequency - actualFrequency) <= 5){
+    frequencyDiff = abs(targetFrequency - actualFrequency);
+
+
+    if (frequencyDiff <= 5){
       digitalWrite(redLED,LOW);
       digitalWrite(greenLED,HIGH);
       tuned = true;
       break;
     }
 
-    // 4. Decide how to turn
+    // servo 
     if (targetFrequency > 0 && actualFrequency > 0) {
 
+      //decide turn time
+      if (frequencyDiff >= 200){
+        turnTime = 2000;
+      }
+      else if (frequencyDiff >= 100){
+        turnTime = 1000;
+      }
+      else{
+        turnTime = 500;
+      }
+
+      //decide turn direction
       if (actualFrequency < targetFrequency) {
-        if(prevDirection == "CCW"){
-          turnTime = turnTime / 2;
-        }
         Serial.println("Turning Clockwise (Tighten)");
-        prevDirection = "CW";
         myServo.writeMicroseconds(1800);
         delay(turnTime); 
         }
       else if (actualFrequency > targetFrequency) {
-        if(prevDirection == "CW"){
-          turnTime = turnTime / 2;
-        }
         Serial.println("Turning Counterclockwise (Loosen)");
-        prevDirection = "CCW";
         myServo.writeMicroseconds(1350);
         delay(turnTime); 
       }
@@ -206,13 +216,15 @@ void loop() {
       Serial.println("Error: Invalid Target or Actual Frequency");
     }
 
-    // 5. Stop Servo
+    //stop Servo
     Serial.println("Stopping Servo...");
     myServo.writeMicroseconds(1500);
     delay(3000);
   }
     newNoteReceived = false;
   }
+
+
   if(detectMode){
     Serial.println("Striking Drum...");
     digitalWrite(actuatorPin, HIGH);
