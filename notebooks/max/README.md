@@ -1,1 +1,1 @@
-Here are each group member's markdown notebooks
+Max's markdown notebook
